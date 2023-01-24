@@ -42,9 +42,9 @@ def plot_mri_slice(mri_slice: np.ndarray, seg_slice: Union[None, np.ndarray] = N
 st.set_page_config(layout="wide")
 st.title("BraTS 2018 Data Visualization")
 
-base_dir = Path("/home/doronser/data/brats/")
-hgg_subjects_dirs = sorted([subj_dir for subj_dir in (base_dir / "training/HGG").iterdir()])
-lgg_subjects_dirs = sorted([subj_dir for subj_dir in (base_dir / "training/LGG").iterdir()])
+base_dir = Path("/raid/data/users/doronser/")
+hgg_subjects_dirs = sorted([subj_dir for subj_dir in (base_dir / "MICCAI_BraTS_2018_Data_Training/HGG").iterdir()])
+lgg_subjects_dirs = sorted([subj_dir for subj_dir in (base_dir / "MICCAI_BraTS_2018_Data_Training/LGG").iterdir()])
 
 col1, col2, col3 = st.columns(3)
 gg = col1.selectbox("Glioma Grade", ["Low", "High"])
