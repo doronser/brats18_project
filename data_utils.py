@@ -1,9 +1,6 @@
 import os
-import sys
-import numpy as np
-from glob import glob
-from typing import Optional, Union, Tuple
 from easydict import EasyDict
+from typing import Optional, Union, Tuple
 
 import torch
 import torchio as tio
@@ -15,8 +12,8 @@ def load_brats2018_data(base_path, prep=None, aug=None):
     """load BraTS2018 data as TorchIO SubjectsDataset
 
     :param base_path: path to BraTS2018 training data
-    :param transform: transform object to be used in the dataset
-    :param val_split: list of indices to use for validation set
+    :param prep: preprocessing transform object
+    :param aug: augmentations transform object
     :return: torchio.SubjectsDataset of entire dataset or train/val datasets when val_split is given
     """
     # get data
@@ -40,8 +37,24 @@ def load_brats2018_data(base_path, prep=None, aug=None):
     if aug is not None:
         transform.append(aug)
 
-    return tio.SubjectsDataset(subjects=subjects, transform=tio.Compose(transform))
+    return Brats18Dataset(subjects=subjects, transform=tio.Compose(transform))
 
+
+class Brats18Dataset(tio.SubjectsDataset):
+    def __init__(self, subjects, transform=None):
+        super(Brats18Dataset, self).__init__(subjects, transform)
+
+    def get_subject(self, subj_name, pad=True):
+        for subj in self._subjects:
+            if subj.subj_name == subj_name:
+                if pad and subj['t1'].tensor.size()[-1] != 160:
+                    for k in ['t1', 't1ce', 't2', 'flair', 'seg']:
+                        v = subj[k].tensor
+                        v = torch.cat([v, torch.zeros([*subj[k].tensor.size()[:-1], 5], device=v.device)], dim=-1)
+                        subj[k].set_data(v)
+                return subj
+        print("No such subject!", subj_name)
+        return None
 
 class Brats18DataModule(pl.LightningDataModule):
     def __init__(self, data_cfg: EasyDict):
