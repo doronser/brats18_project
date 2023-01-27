@@ -51,6 +51,7 @@ if __name__ == "__main__":
         # define pl loggers and callbacks
         time_suffix = datetime.now().strftime(r"%y%m%d_%H%M%S")
         wandb_logger = WandbLogger(project="intro2dl_brats2018", name=f"{cfg.name}_{time_suffix}")
+        wandb.config.update(**cfg)
         ckpt_clbk = pl.callbacks.ModelCheckpoint(dirpath=os.path.join(cfg.ckpt_path, f"{cfg.name}_{time_suffix}"),
                                                  filename=cfg.name + '_epoch{epoch:02d}', auto_insert_metric_name=False,
                                                  save_top_k=-1, every_n_epochs=10)

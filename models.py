@@ -30,10 +30,12 @@ class SegModel(BaseModel):
     def prepare_batch(self, batch):
         x = torch.cat([batch['t1'][tio.DATA], batch['t1ce'][tio.DATA],
                        batch['t2'][tio.DATA], batch['flair'][tio.DATA]], dim=1)
-        x = torch.cat([x, torch.zeros([*x.size()[:-1], 5], device=x.device)], dim=-1)  # pad to even dimension
 
         y = batch['seg'][tio.DATA]
-        y = torch.cat([y, torch.zeros([*y.size()[:-1], 5], device=y.device)], dim=-1)  # pad to even dimension
+
+        if x.size()[-1] != 160:  # pad to even dimension
+            x = torch.cat([x, torch.zeros([*x.size()[:-1], 5], device=x.device)], dim=-1)
+            y = torch.cat([y, torch.zeros([*y.size()[:-1], 5], device=y.device)], dim=-1)
 
         mask0 = torch.where(y == 0, 1, 0)
         mask1 = torch.where(y == 1, 1, 0)
