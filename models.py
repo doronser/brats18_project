@@ -11,8 +11,8 @@ from shared_utils.models import BaseModel  # noqa: E402
 
 sys.path.append(f"/home/doronser/workspace/MedicalZooPytorch/")
 from lib.losses3D import DiceLoss  # noqa: E402
-
-from monai.networks.blocks import Convolution
+from monai.networks.blocks import Convolution  # noqa: E402
+from monai.networks.nets import UNet as Monai_UNet  # noqa: E402
 
 
 
@@ -75,29 +75,95 @@ class SegModel(BaseModel):
         return loss
 
 
-# TODO complete
 class Unet3D(nn.Module):
-    def __init__(self, encoder: nn.Module):
+    def __init__(self, depth: int = 5, in_channels: int = 4):
         super().__init__()
-        self.encoder = encoder
-        self.decoder = self.build_decoder()
+        self.encoder = Encoder3D(depth=depth, in_channels=in_channels)
+        self.decoder = Decoder3D(depth=depth, in_channels=self.encoder.out_size, out_channels=in_channels,
+                                 skip_sizes=sorted(self.encoder.skip_sizes,reverse=True))
+        self.unet = nn.Sequential(self.encoder, self.decoder)
 
-    def build_decoder(self):
-        pass
+    def __repr__(self):
+        return self.unet.__repr__()
 
     def forward(self, x):
-        # TODO check
-        x, skip = self.encoder(x)
-        out = self.decoder(x, skip)
+        return self.unet(x)
+
+
+class Decoder3D(nn.Module):
+    def __init__(self, depth: int = 5, in_channels: int = 64, out_channels: int = 4, skip_sizes: list = ()):
+        super(Decoder3D, self).__init__()
+        self.depth = depth
+        self.skip_sizes = skip_sizes
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.decoder = self.build_decoder()
+
+    def __repr__(self):
+        return self.decoder.__repr__()
+
+    def build_decoder(self):
+        blocks = []
+        in_c = self.in_channels
+        out_c = self.skip_sizes[0] // 2
+        for i in range(self.depth - 2):
+            in_c += self.skip_sizes[i]
+            blocks.append(Convolution(
+                spatial_dims=3,
+                in_channels=in_c,
+                out_channels=out_c,
+                kernel_size=3,
+                padding=1,
+                strides=2,
+                adn_ordering="NDA",
+                act=("prelu", {"init": 0.2}),
+                dropout=0.1,
+                norm="instance",
+                output_padding=1,
+                is_transposed=True
+            ))
+            in_c = out_c
+            if out_c != self.out_channels:
+                out_c //= 2
+        # last block is only convTranspose3D
+        blocks.append(Convolution(spatial_dims=3,
+                                  in_channels=in_c+self.skip_sizes[-1],
+                                  out_channels=self.out_channels,
+                                  kernel_size=3,
+                                  strides=2,
+                                  padding=1,
+                                  output_padding=1,
+                                  is_transposed=True,
+                                  act=None, norm=None, dropout=None
+                                  ))
+        return blocks
+
+    def forward(self, x):
+        out, skip = x
+        for dec_block, skip in zip(self.decoder, skip):
+            out = torch.cat([out, skip], dim=1)
+            out = dec_block(out)
         return out
 
 
 class Encoder3D(nn.Module):
-    def __init__(self, depth: int = 4, in_channels: int = 4):
+    def __init__(self, depth: int = 5, in_channels: int = 4):
+        """U-Net 3D encoder.
+        Has *depth* downsampling blocks, where number channels is doubled for every block starting block #2.
+        Each block is a monai convolution block: conv3D -> instance-norm -> dropout -> PReLU activation
+
+        :param depth: determines the number of downsampling blocks
+        :param in_channels: number of input channels
+        """
         super(Encoder3D, self).__init__()
         self.depth = depth
         self.in_channels = in_channels
-        self.encoder, self.out_list = self.build_encoder()
+        self.encoder, out_list = self.build_encoder()
+        self.skip_sizes = out_list[:-1]
+        self.out_size = out_list[-1]
+
+    def __repr__(self):
+        return self.encoder.__repr__()
 
     def build_encoder(self):
         blocks = []
@@ -105,16 +171,18 @@ class Encoder3D(nn.Module):
         out_c = self.in_channels
         out_list = []
         for i in range(self.depth):
-            if i != 0:
-                out_list.append(out_c)
+            out_list.append(out_c)
             blocks.append(Convolution(
                 spatial_dims=3,
+                kernel_size=3,
                 in_channels=in_c,
                 out_channels=out_c,
+                padding=1,
+                strides=2 if i<self.depth-1 else 1,
                 adn_ordering="NDA",
                 act=("prelu", {"init": 0.2}),
                 dropout=0.1,
-                norm=("instance", {"normalized_shape": out_c}),
+                norm="instance",
             ))
             in_c = out_c
             out_c *= 2
@@ -126,6 +194,7 @@ class Encoder3D(nn.Module):
         for b in self.encoder:
             x = b(x)
             skip.append(x)
+        skip.pop()  # remove last output
         skip.reverse()
         return x, skip
 
