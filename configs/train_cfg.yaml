@@ -1,0 +1,69 @@
+name: "UNet3D Test"
+ckpt_path: "/home/doronser/storage/brats18_projects/ckpts/"
+
+data:
+  dir: "/raid/data/users/doronser/MICCAI_BraTS_2018_Data_Training/"
+  batch_size: 1
+  num_workers: 4
+  val_split_size: 0.1
+  preprocessing:
+      ZNormalization:
+        masking_method:
+  augmentations:
+    RandomAffine:
+      scales:
+        - 0.9
+        - 1.1
+      degrees: 0
+      translation: 0
+    RandomFlip:
+      axes:
+        - 0
+        - 1
+        - 2
+# random per-channel intensity shift (-0.1, 0.1)
+
+
+model:
+  name: "UNet"
+  kwargs:
+    spatial_dims: 3
+    in_channels: 4
+    out_channels: 4
+    channels:
+      - 4
+      - 8
+      - 16
+      - 32
+      - 64
+    strides:
+      - 2
+      - 2
+      - 2
+      - 2
+  pretrained: false
+  checkpoint_path: '/media/rrtammyfs/Users/doronser/brain_age/ckpts/RotPred test_230112_230139/RotPred test_epoch09.ckpt'
+
+trainer:
+  epochs: 100
+  gpu: 1
+
+#loss:
+#  name: 'DiceLoss'
+
+optimizer:
+  name: 'Adam'
+  lr: 3.e-4
+  weight_decay: 5.e-5
+  eps: 1.e-8
+
+scheduler:
+#  name: 'CosineAnnealingLR'
+#  T_max: 5.
+#  eta_min: 1.e-6
+  name: 'ExponentialLR'
+  gamma: 0.95
+
+
+
+
