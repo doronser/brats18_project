@@ -12,6 +12,8 @@ from shared_utils.models import BaseModel  # noqa: E402
 sys.path.append(f"/home/doronser/workspace/MedicalZooPytorch/")
 from lib.losses3D import DiceLoss  # noqa: E402
 
+from monai.networks.blocks import Convolution
+
 
 
 
@@ -71,3 +73,61 @@ class SegModel(BaseModel):
         self.log('val_dice_ED', per_ch_score[2])
         self.log('val_dice_ET', per_ch_score[3])
         return loss
+
+
+# TODO complete
+class Unet3D(nn.Module):
+    def __init__(self, encoder: nn.Module):
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = self.build_decoder()
+
+    def build_decoder(self):
+        pass
+
+    def forward(self, x):
+        # TODO check
+        x, skip = self.encoder(x)
+        out = self.decoder(x, skip)
+        return out
+
+
+class Encoder3D(nn.Module):
+    def __init__(self, depth: int = 4, in_channels: int = 4):
+        super(Encoder3D, self).__init__()
+        self.depth = depth
+        self.in_channels = in_channels
+        self.encoder, self.out_list = self.build_encoder()
+
+    def build_encoder(self):
+        blocks = []
+        in_c = self.in_channels
+        out_c = self.in_channels
+        out_list = []
+        for i in range(self.depth):
+            if i != 0:
+                out_list.append(out_c)
+            blocks.append(Convolution(
+                spatial_dims=3,
+                in_channels=in_c,
+                out_channels=out_c,
+                adn_ordering="NDA",
+                act=("prelu", {"init": 0.2}),
+                dropout=0.1,
+                norm=("instance", {"normalized_shape": out_c}),
+            ))
+            in_c = out_c
+            out_c *= 2
+
+        return blocks, out_list
+
+    def forward(self, x):
+        skip = []
+        for b in self.encoder:
+            x = b(x)
+            skip.append(x)
+        skip.reverse()
+        return x, skip
+
+
+
