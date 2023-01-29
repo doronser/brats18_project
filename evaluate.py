@@ -1,15 +1,25 @@
 import sys
 import torch
 import wandb
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
 from pathlib import Path
 from easydict import EasyDict
+
+import torchio as tio
 import monai.networks.nets as model_zoo
 
 sys.path.append(f"/home/doronser/workspace/")
 from brats18_project.models import SegModel  # noqa: E402
+from brats18_project.data_utils import Brats18DataModule  # noqa: E402
 
 sys.path.append(f"/home/doronser/workspace/MedicalZooPytorch/")
 from lib.losses3D import DiceLoss  # noqa: E402
+
+# for reproducibility
+torch.manual_seed(42)
+np.random.seed(42)
 
 
 def get_wandb_model(wandb_path: str):
@@ -24,6 +34,7 @@ def get_wandb_model(wandb_path: str):
     model = SegModel.load_from_checkpoint(latest_ckpt, net=net, criterion=DiceLoss(classes=4),
                                           optimizer_params=cfg.optimizer, scheduler_params=cfg.scheduler)
     return model, cfg
+
 
 def calc_batch_metrics(model: torch.nn.Module, batch: dict) -> (float, float, float):
     """calculate WT,TC and ET dice scores for a batch of size 1
@@ -58,3 +69,30 @@ def calc_batch_metrics(model: torch.nn.Module, batch: dict) -> (float, float, fl
     _, dice_et = dice(pred_soft_et.unsqueeze(0), label_et.unsqueeze(0))
     et = dice_et.item()
     return wt, tc, et
+
+
+if __name__ == '__main__':
+    task_id = sys.argv[1]
+    print("getting model")
+    wandb_path = f"bio-vision-lab/intro2dl_brats2018/{task_id}"
+    model, cfg = get_wandb_model(wandb_path)
+    model.eval()
+
+    print("getting data")
+    dm = Brats18DataModule(cfg.data)
+    dm.setup()
+    dl = dm.val_dataloader()
+    ds = dl.dataset.dataset
+    ds.set_transform(tio.Compose([]))
+
+    subj_metrics = []
+    for batch in tqdm(dl, desc='calculating metrics'):
+        wt, tc, et = calc_batch_metrics(model, batch)
+        subj_metrics.append(dict(subj_name=batch['subj_name'][0], dice_wt=wt, dice_tc=tc, dice_et=et))
+
+    metrics_df = pd.DataFrame(subj_metrics)
+    t = wandb.Table(dataframe=metrics_df)
+    with wandb.init(project='intro2dl_brats2018', id=task_id, resume="allow") as run:
+        run.log(data={'metrics_df': t})
+
+    print("done!")
