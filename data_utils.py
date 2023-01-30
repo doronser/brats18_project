@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from easydict import EasyDict
 from typing import Optional, Union, Tuple
 
@@ -27,7 +28,8 @@ def load_brats2018_data(base_path, prep=None, aug=None):
                 flair=tio.ScalarImage(os.path.join(base_path, glioma_grade, subj_name, f"{subj_name}_flair.nii.gz")),
                 seg=tio.LabelMap(os.path.join(base_path, glioma_grade, subj_name, f"{subj_name}_seg.nii.gz")),
                 glioma_grade=glioma_grade,
-                subj_name=subj_name
+                subj_name=subj_name,
+                label=0
             ))
 
     # add transformations
@@ -41,7 +43,8 @@ def load_brats2018_data(base_path, prep=None, aug=None):
 
 
 class Brats18Dataset(tio.SubjectsDataset):
-    def __init__(self, subjects, transform=None):
+    def __init__(self, subjects, transform=None, rot=False):
+        self.rot = rot
         super(Brats18Dataset, self).__init__(subjects, transform)
 
     def get_subject(self, subj_name, pad=True):
@@ -55,6 +58,18 @@ class Brats18Dataset(tio.SubjectsDataset):
                 return subj
         print("No such subject!", subj_name)
         return None
+
+    def __getitem__(self, idx):
+        subj = super().__getitem__(idx)
+        if self.rot:
+            # apply random rotation and add label
+            subj.label = np.random.randint(0, 4)
+            for k in ['t1', 't1ce', 't2', 'flair']:
+                v = subj[k].tensor
+                v = v.rot90(subj.label, dims=(1, 2))
+                subj[k].set_data(v)
+        return subj
+
 
 class Brats18DataModule(pl.LightningDataModule):
     def __init__(self, data_cfg: EasyDict):

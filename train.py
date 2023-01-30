@@ -15,13 +15,14 @@ user = os.getlogin()
 sys.path.append(f"/home/{user}/workspace/")
 from shared_utils.io import yaml_read  # noqa: E402
 from brats18_project.data_utils import Brats18DataModule  # noqa: E402
-from brats18_project.models import SegModel  # noqa: E402
+from brats18_project.models import SegModel, ClassifierModel  # noqa: E402
 
 
 sys.path.append(f"/home/doronser/workspace/MedicalZooPytorch/")
 from lib.losses3D import DiceLoss  # noqa: E402
+from torch.nn import CrossEntropyLoss  # noqa: E402
 # import lib.medzoo as md  # noqa: E402
-import monai.networks.nets as model_zoo  # noqa: E402
+import brats18_project.models as model_zoo  # noqa: E402
 
 # for reproducibility
 torch.manual_seed(42)
@@ -41,17 +42,23 @@ if __name__ == "__main__":
 
     model_cls = getattr(model_zoo, cfg.model.name)
     net = model_cls(**cfg.model.kwargs)
-    model = SegModel(net=net, criterion=DiceLoss(classes=4),
-                     optimizer_params=cfg.optimizer, scheduler_params=cfg.scheduler)
 
-    trainer = pl.Trainer()
+    if cfg.loss.name == 'DiceLoss':
+        model = SegModel(net=net, criterion=DiceLoss(classes=4),
+                         optimizer_params=cfg.optimizer, scheduler_params=cfg.scheduler)
+    elif cfg.loss.name == 'CrossEntropyLoss':
+        model = ClassifierModel(net=net, criterion=nn.CrossEntropyLoss(),
+                                optimizer_params=cfg.optimizer, scheduler_params=cfg.scheduler)
+    else:
+        raise ValueError("Unknown loss")
+
     if args.debug:
         trainer = pl.Trainer(fast_dev_run=True)
     else:
         # define pl loggers and callbacks
         time_suffix = datetime.now().strftime(r"%y%m%d_%H%M%S")
         wandb_logger = WandbLogger(project="intro2dl_brats2018", name=f"{cfg.name}_{time_suffix}")
-        wandb.config.update(**cfg)
+        wandb.config.update(cfg)
         ckpt_clbk = pl.callbacks.ModelCheckpoint(dirpath=os.path.join(cfg.ckpt_path, f"{cfg.name}_{time_suffix}"),
                                                  filename=cfg.name + '_epoch{epoch:02d}', auto_insert_metric_name=False,
                                                  save_top_k=-1, every_n_epochs=10)

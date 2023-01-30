@@ -25,7 +25,7 @@ data:
 
 
 model:
-  name: "UNet"
+  name: "Monai_UNet"
   kwargs:
     spatial_dims: 3
     in_channels: 4
@@ -48,8 +48,10 @@ trainer:
   epochs: 100
   gpu: 1
 
-#loss:
-#  name: 'DiceLoss'
+loss:
+  name: 'DiceLoss'
+
+
 
 optimizer:
   name: 'Adam'
