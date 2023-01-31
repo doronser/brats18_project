@@ -4,6 +4,7 @@ import numpy as np
 import torchio as tio
 import torch.nn as nn
 import pytorch_lightning as pl
+from torchmetrics import Accuracy
 
 
 sys.path.append(f"/home/doronser/workspace/")
@@ -13,6 +14,41 @@ sys.path.append(f"/home/doronser/workspace/MedicalZooPytorch/")
 from lib.losses3D import DiceLoss  # noqa: E402
 from monai.networks.blocks import Convolution  # noqa: E402
 from monai.networks.nets import UNet as Monai_UNet  # noqa: E402
+
+
+class ClassifierModel(BaseModel):
+    def __init__(self, net: nn.Module, criterion=nn.CrossEntropyLoss(), optimizer_params=None, scheduler_params=None):
+        super().__init__(net, criterion, optimizer_params, scheduler_params)
+        self.acc = Accuracy(task="multiclass", num_classes=self.net.num_classes, top_k=1)
+
+    def prepare_batch(self, batch):
+        x = torch.cat([batch['t1'][tio.DATA], batch['t1ce'][tio.DATA],
+                       batch['t2'][tio.DATA], batch['flair'][tio.DATA]], dim=1)
+
+        if x.size()[-1] != 160:  # pad to even dimension
+            x = torch.cat([x, torch.zeros([*x.size()[:-1], 5], device=x.device)], dim=-1)
+
+        y = batch['label']
+        return x, y
+
+    def infer_batch(self, batch):
+        x, y = self.prepare_batch(batch)
+        scores = self.net(x)
+        return scores, y
+
+    def training_step(self, batch, batch_idx):
+        scores, labels = self.infer_batch(batch)
+        loss = self.criterion(scores, labels)
+        acc = self.acc(scores, labels)
+        self.log_dict(dict(train_loss=loss, train_acc=acc), batch_size=labels.size()[0], prog_bar=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        scores, labels = self.infer_batch(batch)
+        loss = self.criterion(scores, labels)
+        acc = self.acc(scores, labels)
+        self.log_dict(dict(val_loss=loss, val_acc=acc), batch_size=labels.size()[0], on_epoch=True, on_step=False)
+        return loss
 
 
 class SegModel(BaseModel):
@@ -25,7 +61,6 @@ class SegModel(BaseModel):
     """
     def __init__(self, net: nn.Module, criterion=DiceLoss(classes=4), optimizer_params=None, scheduler_params=None):
         super().__init__(net, criterion, optimizer_params, scheduler_params)
-        self.softmax = nn.Softmax(dim=-1)
 
     def prepare_batch(self, batch):
         x = torch.cat([batch['t1'][tio.DATA], batch['t1ce'][tio.DATA],
@@ -71,6 +106,31 @@ class SegModel(BaseModel):
         self.log('val_dice_ED', per_ch_score[2])
         self.log('val_dice_ET', per_ch_score[3])
         return loss
+
+
+class EncoderClassifier(nn.Module):
+    def __init__(self, depth: int = 5, in_channels: int = 4, num_classes: int = 10, dropout: int = 0.3):
+        super().__init__()
+        self.flat_size = 144000
+        self.dropout = dropout
+        self.num_classes = num_classes
+        self.encoder = Encoder3D(depth=depth, in_channels=in_channels)
+        self.classifier = nn.Sequential(
+            nn.Dropout(self.dropout),
+            nn.Linear(in_features=self.flat_size, out_features=1024),
+            nn.ReLU(inplace=True),
+            nn.Linear(in_features=1024, out_features=256),
+            nn.ReLU(inplace=True),
+            nn.Linear(in_features=256, out_features=64),
+            nn.ReLU(inplace=True),
+            nn.Dropout(self.dropout),
+            nn.Linear(in_features=64, out_features=self.num_classes)
+        )
+
+    def forward(self, x):
+        x, _ = self.encoder(x)
+        x = x.flatten(1)
+        return self.classifier(x)
 
 
 class Unet3D(nn.Module):
@@ -134,7 +194,7 @@ class Decoder3D(nn.Module):
                                   is_transposed=True,
                                   act=None, norm=None, dropout=None
                                   ))
-        return blocks
+        return nn.ModuleList(blocks)
 
     def forward(self, x):
         out, skip = x
@@ -176,7 +236,7 @@ class Encoder3D(nn.Module):
                 in_channels=in_c,
                 out_channels=out_c,
                 padding=1,
-                strides=2 if i < self.depth-1 else 1,
+                strides=2 if i<self.depth-1 else 1,
                 adn_ordering="NDA",
                 act=("prelu", {"init": 0.2}),
                 dropout=0.1,
@@ -185,7 +245,7 @@ class Encoder3D(nn.Module):
             in_c = out_c
             out_c *= 2
 
-        return blocks, out_list
+        return nn.ModuleList(blocks), out_list
 
     def forward(self, x):
         skip = []
