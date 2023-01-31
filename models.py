@@ -40,7 +40,7 @@ class ClassifierModel(BaseModel):
         scores, labels = self.infer_batch(batch)
         loss = self.criterion(scores, labels)
         acc = self.acc(scores, labels)
-        self.log_dict(dict(train_loss=loss, train_acc=acc), batch_size=labels.size()[0], on_epoch=True, on_step=False)
+        self.log_dict(dict(train_loss=loss, train_acc=acc), batch_size=labels.size()[0], prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
