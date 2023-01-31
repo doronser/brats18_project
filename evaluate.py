@@ -25,6 +25,7 @@ def get_wandb_model(wandb_path: str):
                                           optimizer_params=cfg.optimizer, scheduler_params=cfg.scheduler)
     return model, cfg
 
+
 def calc_batch_metrics(model: torch.nn.Module, batch: dict) -> (float, float, float):
     """calculate WT,TC and ET dice scores for a batch of size 1
 

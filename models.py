@@ -15,8 +15,6 @@ from monai.networks.blocks import Convolution  # noqa: E402
 from monai.networks.nets import UNet as Monai_UNet  # noqa: E402
 
 
-
-
 class SegModel(BaseModel):
     """Pytorch Lightning module to use for BraTS18 segmentation
 
@@ -80,7 +78,7 @@ class Unet3D(nn.Module):
         super().__init__()
         self.encoder = Encoder3D(depth=depth, in_channels=in_channels)
         self.decoder = Decoder3D(depth=depth, in_channels=self.encoder.out_size, out_channels=in_channels,
-                                 skip_sizes=sorted(self.encoder.skip_sizes,reverse=True))
+                                 skip_sizes=sorted(self.encoder.skip_sizes, reverse=True))
         self.unet = nn.Sequential(self.encoder, self.decoder)
 
     def __repr__(self):
@@ -178,7 +176,7 @@ class Encoder3D(nn.Module):
                 in_channels=in_c,
                 out_channels=out_c,
                 padding=1,
-                strides=2 if i<self.depth-1 else 1,
+                strides=2 if i < self.depth-1 else 1,
                 adn_ordering="NDA",
                 act=("prelu", {"init": 0.2}),
                 dropout=0.1,
