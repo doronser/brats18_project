@@ -35,7 +35,7 @@ model:
   checkpoint_path: '/media/rrtammyfs/Users/doronser/brain_age/ckpts/RotPred test_230112_230139/RotPred test_epoch09.ckpt'
 
 trainer:
-  epochs: 100
+  epochs: 5
   gpu: 1
 
 loss:

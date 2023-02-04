@@ -8,13 +8,16 @@ import torchio as tio
 import pytorch_lightning as pl
 from torch.utils.data import Dataset, DataLoader
 
+from custom_transforms import BarlowTwinsTransform
 
-def load_brats2018_data(base_path, prep=None, aug=None):
+
+def load_brats2018_data(base_path, prep=None, aug=None, train_ssl=False):
     """load BraTS2018 data as TorchIO SubjectsDataset
 
     :param base_path: path to BraTS2018 training data
     :param prep: preprocessing transform object
     :param aug: augmentations transform object
+    :param train_ssl: bool parameter for setting the augmentations needed for training barlow twins
     :return: torchio.SubjectsDataset of entire dataset or train/val datasets when val_split is given
     """
     # get data
@@ -38,6 +41,10 @@ def load_brats2018_data(base_path, prep=None, aug=None):
         transform.append(prep)
     if aug is not None:
         transform.append(aug)
+
+    if train_ssl:
+        barlow_transform = BarlowTwinsTransform(tio.Compose(transform))
+        return Brats18Dataset(subjects=subjects, transform=barlow_transform)
 
     return Brats18Dataset(subjects=subjects, transform=tio.Compose(transform))
 
