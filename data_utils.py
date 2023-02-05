@@ -1,4 +1,5 @@
 import os
+import sys
 import numpy as np
 from easydict import EasyDict
 from typing import Optional, Union, Tuple
@@ -8,7 +9,8 @@ import torchio as tio
 import pytorch_lightning as pl
 from torch.utils.data import Dataset, DataLoader
 
-from custom_transforms import BarlowTwinsTransform
+sys.path.append(f'/home/{os.getlogin()}/workspace')
+from brats18_project.custom_transforms import BarlowTwinsTransform
 
 
 def load_brats2018_data(base_path, prep=None, aug=None, train_ssl=False):
@@ -32,7 +34,7 @@ def load_brats2018_data(base_path, prep=None, aug=None, train_ssl=False):
                 seg=tio.LabelMap(os.path.join(base_path, glioma_grade, subj_name, f"{subj_name}_seg.nii.gz")),
                 glioma_grade=glioma_grade,
                 subj_name=subj_name,
-                label=0
+                # label=0
             ))
 
     # add transformations
@@ -43,6 +45,7 @@ def load_brats2018_data(base_path, prep=None, aug=None, train_ssl=False):
         transform.append(aug)
 
     if train_ssl:
+        print("using BarlowTwinsTransform!")
         barlow_transform = BarlowTwinsTransform(tio.Compose(transform))
         return Brats18Dataset(subjects=subjects, transform=barlow_transform)
 
@@ -87,11 +90,12 @@ class Brats18DataModule(pl.LightningDataModule):
         self.data_dir = data_cfg.dir
         self.batch_size = data_cfg.batch_size
         self.num_workers = data_cfg.num_workers
+        self.ssl = data_cfg.get('train_ssl', False)
         self.preprocessing_transform, self.augmentation_transform = self.parse_cfg_transform(data_cfg)
 
     def setup(self, stage: Optional[str] = None):
         brats_ds = load_brats2018_data(self.data_dir, prep=self.preprocessing_transform,
-                                       aug=self.augmentation_transform)
+                                       aug=self.augmentation_transform, train_ssl=self.ssl)
         num_val = int(self.val_split_size*len(brats_ds))
         num_train = len(brats_ds) - num_val
         self.train_set, self.val_set = torch.utils.data.random_split(brats_ds, lengths=[num_train, num_val])

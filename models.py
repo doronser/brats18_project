@@ -1,4 +1,3 @@
-from losses import BarlowTwinsLoss
 
 import sys
 import torch
@@ -12,6 +11,7 @@ from functools import partial
 
 sys.path.append(f"/home/doronser/workspace/")
 from shared_utils.models import BaseModel  # noqa: E402
+from .losses import BarlowTwinsLoss
 
 sys.path.append(f"/home/doronser/workspace/MedicalZooPytorch/")
 from lib.losses3D import DiceLoss  # noqa: E402
@@ -261,24 +261,27 @@ class Encoder3D(nn.Module):
 
 
 class ProjectionHead(nn.Module):
-    def __init__(self, input_dim=2048, hidden_dim=2048, output_dim=128):
+    def __init__(self, input_dim=2250, hidden_dim=2048, output_dim=128):
         super().__init__()
 
         self.projection_head = nn.Sequential(
             nn.Linear(input_dim, hidden_dim, bias=True),
-            nn.BatchNorm1d(hidden_dim),
+            # nn.BatchNorm1d(hidden_dim),
+            nn.InstanceNorm1d(hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, output_dim, bias=False),
         )
 
     def forward(self, x):
-        return self.projection_head(x)
+        x_pool = x.mean(dim=1, keepdim=False)
+        x_flat = x_pool.flatten(1)
+        return self.projection_head(x_flat)
 
 
 class BarlowTwins(pl.LightningModule):
     def __init__(
         self,
-        encoder,
+        encoder: nn.Module,
         encoder_out_dim,
         num_training_samples,
         batch_size,
@@ -304,10 +307,17 @@ class BarlowTwins(pl.LightningModule):
         return self.encoder(x)
 
     def shared_step(self, batch):
-        (x1, x2, _), _ = batch
+        x1, x2 = batch
+        x1 = torch.cat([x1['t1'][tio.DATA], x1['t1ce'][tio.DATA], x1['t2'][tio.DATA], x1['flair'][tio.DATA]], dim=1)
+        x2 = torch.cat([x2['t1'][tio.DATA], x2['t1ce'][tio.DATA], x2['t2'][tio.DATA], x2['flair'][tio.DATA]], dim=1)
+        if x1.size()[-1] != 160:  # pad to even dimension
+            x1 = torch.cat([x1, torch.zeros([*x1.size()[:-1], 5], device=x1.device)], dim=-1)
+            x2 = torch.cat([x2, torch.zeros([*x2.size()[:-1], 5], device=x2.device)], dim=-1)
 
-        z1 = self.projection_head(self.encoder(x1))
-        z2 = self.projection_head(self.encoder(x2))
+        out1, _ = self.encoder(x1)
+        out2, _ = self.encoder(x2)
+        z1 = self.projection_head(out1)
+        z2 = self.projection_head(out2)
 
         return self.loss_fn(z1, z2)
 
