@@ -1,11 +1,15 @@
 import os
 import sys
 import argparse
+from pathlib import Path
+
 import numpy as np
+from copy import deepcopy
 from datetime import datetime
 
 import wandb
 import torch
+from easydict import EasyDict
 from torch import nn
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
@@ -22,7 +26,7 @@ sys.path.append(f"/home/doronser/workspace/MedicalZooPytorch/")
 from lib.losses3D import DiceLoss  # noqa: E402
 from torch.nn import CrossEntropyLoss  # noqa: E402
 # import lib.medzoo as md  # noqa: E402
-import brats18_project.models as model_zoo  # noqa: E402
+from brats18_project.models import Encoder3D, Unet3D, BarlowTwins  # noqa: E402
 
 # for reproducibility
 torch.manual_seed(42)
@@ -40,21 +44,18 @@ if __name__ == "__main__":
 
     data_module = Brats18DataModule(cfg.data)
 
-    model_cls = getattr(model_zoo, cfg.model.name)
-    net = model_cls(**cfg.model.kwargs)
+    api = wandb.Api()
+    run = api.run(cfg.model.wandb_path)
+    run_name = run.name.replace(' ', '_')
+    ckpts_dir = Path(run.config['ckpt_path'])
+    latest_ckpt = sorted([x for x in (ckpts_dir / run_name).glob('*')])[-1]
+    print("using ckpt:", latest_ckpt)
 
-    if cfg.loss.name == 'DiceLoss':
-        model = SegModel(net=net, criterion=DiceLoss(classes=4),
-                         optimizer_params=cfg.optimizer, scheduler_params=cfg.scheduler)
-    elif cfg.loss.name == 'CrossEntropyLoss':
-        model = ClassifierModel(net=net, criterion=nn.CrossEntropyLoss(),
-                                optimizer_params=cfg.optimizer, scheduler_params=cfg.scheduler)
-    elif cfg.loss.name == 'BarlowTwinsLoss':
-        model = model_zoo.BarlowTwins(encoder=net, batch_size=cfg.data.batch_size,
-                                      learning_rate=cfg.optimizer.lr, num_training_samples=257,
-                                      max_epochs=cfg.trainer.epochs, lambda_coeff=cfg.loss.lambda_coeff)
-    else:
-        raise ValueError("Unknown loss")
+    net = BarlowTwins.load_from_checkpoint(latest_ckpt, encoder=Encoder3D(), num_training_samples=7, batch_size=7)
+
+    unet = Unet3D(encoder=deepcopy(net.encoder))
+    model = SegModel(net=unet, criterion=DiceLoss(classes=4), optimizer_params=cfg.optimizer,
+                     scheduler_params=cfg.scheduler)
 
     if args.debug:
         trainer = pl.Trainer(fast_dev_run=True)

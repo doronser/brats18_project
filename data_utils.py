@@ -7,7 +7,7 @@ from typing import Optional, Union, Tuple
 import torch
 import torchio as tio
 import pytorch_lightning as pl
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, default_collate
 
 sys.path.append(f'/home/{os.getlogin()}/workspace')
 from brats18_project.custom_transforms import BarlowTwinsTransform
@@ -48,8 +48,9 @@ def load_brats2018_data(base_path, prep=None, aug=None, train_ssl=False):
         print("using BarlowTwinsTransform!")
         barlow_transform = BarlowTwinsTransform(tio.Compose(transform))
         return Brats18Dataset(subjects=subjects, transform=barlow_transform)
-
-    return Brats18Dataset(subjects=subjects, transform=tio.Compose(transform))
+    else:
+        print("Using default Transform!")
+        return Brats18Dataset(subjects=subjects, transform=tio.Compose(transform))
 
 
 class Brats18Dataset(tio.SubjectsDataset):
@@ -90,7 +91,9 @@ class Brats18DataModule(pl.LightningDataModule):
         self.data_dir = data_cfg.dir
         self.batch_size = data_cfg.batch_size
         self.num_workers = data_cfg.num_workers
-        self.ssl = data_cfg.get('train_ssl', False)
+        self.ssl = data_cfg.get('ssl', False)
+        self.collate_fn = barlow_collate if self.ssl else None
+        print("SSL=", self.ssl)
         self.preprocessing_transform, self.augmentation_transform = self.parse_cfg_transform(data_cfg)
 
     def setup(self, stage: Optional[str] = None):
@@ -101,10 +104,12 @@ class Brats18DataModule(pl.LightningDataModule):
         self.train_set, self.val_set = torch.utils.data.random_split(brats_ds, lengths=[num_train, num_val])
 
     def train_dataloader(self):
-        return DataLoader(dataset=self.train_set, shuffle=True, batch_size=self.batch_size, num_workers=self.num_workers)
+        return DataLoader(dataset=self.train_set, shuffle=True, batch_size=self.batch_size,
+                          num_workers=self.num_workers, drop_last=self.ssl, collate_fn=self.collate_fn)
 
     def val_dataloader(self):
-        return DataLoader(dataset=self.val_set, shuffle=False, batch_size=self.batch_size, num_workers=self.num_workers)
+        return DataLoader(dataset=self.val_set, shuffle=False, batch_size=self.batch_size,
+                          num_workers=self.num_workers, drop_last=self.ssl, collate_fn=self.collate_fn)
 
     @staticmethod
     def parse_cfg_transform(yml_cfg: Union[dict, EasyDict]) -> Tuple[tio.Transform, None]:
@@ -136,3 +141,21 @@ class Brats18DataModule(pl.LightningDataModule):
 
         return preprocessing, augmentations
 
+
+def barlow_collate(batch):
+    """custom collate function to correctly stack augmented data for barlow twins training"""
+    # print(f"{type(batch[0][0])=}")
+    # print(f"{len(batch[0])=}")
+    # print("BARLOW COLLATE 2!")
+    x1_list = []
+    x2_list = []
+    for (x1, x2) in batch:
+        for x in [x1, x2]:
+            del x['seg']
+            del x['subj_name']
+            del x['glioma_grade']
+        x1_list.append(x1)
+        x2_list.append(x2)
+    x1_batch = default_collate(x1_list)
+    x2_batch = default_collate(x2_list)
+    return x1_batch, x2_batch

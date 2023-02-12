@@ -11,7 +11,7 @@ import torchio as tio
 import monai.networks.nets as model_zoo
 
 sys.path.append(f"/home/doronser/workspace/")
-from brats18_project.models import SegModel  # noqa: E402
+from brats18_project.models import SegModel, BarlowTwins  # noqa: E402
 from brats18_project.data_utils import Brats18DataModule  # noqa: E402
 
 sys.path.append(f"/home/doronser/workspace/MedicalZooPytorch/")
@@ -22,7 +22,7 @@ torch.manual_seed(42)
 np.random.seed(42)
 
 
-def get_wandb_model(wandb_path: str):
+def get_wandb_model(wandb_path: str, barlow=False):
     api = wandb.Api()
     run = api.run(wandb_path)
     cfg = EasyDict(run.config)
@@ -31,8 +31,11 @@ def get_wandb_model(wandb_path: str):
     latest_ckpt = sorted([x for x in (ckpts_dir / run_name).glob('*')])[-1]
     model_cls = getattr(model_zoo, cfg.model.name)
     net = model_cls(**cfg.model.kwargs)
-    model = SegModel.load_from_checkpoint(latest_ckpt, net=net, criterion=DiceLoss(classes=4),
-                                          optimizer_params=cfg.optimizer, scheduler_params=cfg.scheduler)
+    if barlow:
+        model = BarlowTwins.load_from_checkpoint(latest_ckpt, )
+    else:
+        model = SegModel.load_from_checkpoint(latest_ckpt, net=net, criterion=DiceLoss(classes=4),
+                                              optimizer_params=cfg.optimizer, scheduler_params=cfg.scheduler)
     return model, cfg
 
 

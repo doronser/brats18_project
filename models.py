@@ -91,23 +91,23 @@ class SegModel(BaseModel):
     def training_step(self, batch, batch_idx):
         scores, labels = self.infer_batch(batch)
         loss, per_ch_score = self.criterion(scores, labels)
-        self.log('train_loss', loss, prog_bar=True)
-        self.log('train_dice', 100*(1-loss))
-        self.log('train_dice_BG', per_ch_score[0])
-        self.log('train_dice_NCR/NET', per_ch_score[1])
-        self.log('train_dice_ED', per_ch_score[2])
-        self.log('train_dice_ET', per_ch_score[3])
+        self.log('train_loss', loss, prog_bar=True, batch_size=labels.shape[0])
+        self.log('train_dice', 100*(1-loss), batch_size=labels.shape[0])
+        self.log('train_dice_BG', per_ch_score[0], batch_size=labels.shape[0])
+        self.log('train_dice_NCR/NET', per_ch_score[1], batch_size=labels.shape[0])
+        self.log('train_dice_ED', per_ch_score[2], batch_size=labels.shape[0])
+        self.log('train_dice_ET', per_ch_score[3], batch_size=labels.shape[0])
         return loss
 
     def validation_step(self, batch, batch_idx):
         scores, labels = self.infer_batch(batch)
         loss, per_ch_score = self.criterion(scores, labels)
         self.log("val_loss", loss, batch_size=labels.shape[0], on_epoch=True, on_step=False)
-        self.log('val_dice', 100 * (1 - loss))
-        self.log('val_dice_BG', per_ch_score[0])
-        self.log('val_dice_NCR/NET', per_ch_score[1])
-        self.log('val_dice_ED', per_ch_score[2])
-        self.log('val_dice_ET', per_ch_score[3])
+        self.log('val_dice', 100 * (1 - loss), batch_size=labels.shape[0])
+        self.log('val_dice_BG', per_ch_score[0], batch_size=labels.shape[0])
+        self.log('val_dice_NCR/NET', per_ch_score[1], batch_size=labels.shape[0])
+        self.log('val_dice_ED', per_ch_score[2], batch_size=labels.shape[0])
+        self.log('val_dice_ET', per_ch_score[3], batch_size=labels.shape[0])
         return loss
 
 
@@ -137,9 +137,12 @@ class EncoderClassifier(nn.Module):
 
 
 class Unet3D(nn.Module):
-    def __init__(self, depth: int = 5, in_channels: int = 4):
+    def __init__(self, depth: int = 5, in_channels: int = 4, encoder=None):
         super().__init__()
-        self.encoder = Encoder3D(depth=depth, in_channels=in_channels)
+        if encoder is None:
+            self.encoder = Encoder3D(depth=depth, in_channels=in_channels)
+        else:
+            self.encoder = encoder
         self.decoder = Decoder3D(depth=depth, in_channels=self.encoder.out_size, out_channels=in_channels,
                                  skip_sizes=sorted(self.encoder.skip_sizes, reverse=True))
         self.unet = nn.Sequential(self.encoder, self.decoder)
@@ -261,9 +264,10 @@ class Encoder3D(nn.Module):
 
 
 class ProjectionHead(nn.Module):
-    def __init__(self, input_dim=2250, hidden_dim=2048, output_dim=128):
+    # def __init__(self, input_dim=768, hidden_dim=512, output_dim=64):
+    def __init__(self, input_dim=64, hidden_dim=64, output_dim=64):
         super().__init__()
-
+        self.avg_pool = nn.AvgPool3d(kernel_size=(15, 15, 10))  # TODO: make this dynamic
         self.projection_head = nn.Sequential(
             nn.Linear(input_dim, hidden_dim, bias=True),
             # nn.BatchNorm1d(hidden_dim),
@@ -273,7 +277,8 @@ class ProjectionHead(nn.Module):
         )
 
     def forward(self, x):
-        x_pool = x.mean(dim=1, keepdim=False)
+        # x_pool = x.mean(dim=1, keepdim=False)
+        x_pool = self.avg_pool(x)
         x_flat = x_pool.flatten(1)
         return self.projection_head(x_flat)
 
@@ -282,21 +287,21 @@ class BarlowTwins(pl.LightningModule):
     def __init__(
         self,
         encoder: nn.Module,
-        encoder_out_dim,
         num_training_samples,
         batch_size,
         lambda_coeff=5e-3,
-        z_dim=128,
+        z_dim=64,
         learning_rate=1e-4,
         warmup_epochs=10,
         max_epochs=200,
     ):
         super().__init__()
-
         self.encoder = encoder
-        self.projection_head = ProjectionHead(input_dim=encoder_out_dim, hidden_dim=encoder_out_dim, output_dim=z_dim)
+        # self.projection_head = ProjectionHead(input_dim=z_dim, hidden_dim=z_dim, output_dim=z_dim)
+        self.projection_head = ProjectionHead()  # TODO: do not init with default values
         self.loss_fn = BarlowTwinsLoss(batch_size=batch_size, lambda_coeff=lambda_coeff, z_dim=z_dim)
 
+        self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.warmup_epochs = warmup_epochs
         self.max_epochs = max_epochs
@@ -323,12 +328,12 @@ class BarlowTwins(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss = self.shared_step(batch)
-        self.log("train_loss", loss, on_step=True, on_epoch=False)
+        self.log("train_loss", loss, on_step=True, on_epoch=False, batch_size=self.batch_size)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss = self.shared_step(batch)
-        self.log("val_loss", loss, on_step=False, on_epoch=True)
+        val_loss = self.shared_step(batch)
+        self.log("val_loss", val_loss, on_step=False, on_epoch=True, batch_size=self.batch_size)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
