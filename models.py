@@ -1,22 +1,20 @@
-
+import os
 import sys
 import torch
-import numpy as np
 import torchio as tio
 import torch.nn as nn
 import pytorch_lightning as pl
 from torchmetrics import Accuracy
 
-from functools import partial
 
-sys.path.append(f"/home/doronser/workspace/")
+sys.path.append(f"/home/{os.getlogin()}/workspace/")
 from shared_utils.models import BaseModel  # noqa: E402
-from .losses import BarlowTwinsLoss
+from .utils import linear_warmup_decay  # noqa: E402
+from .losses import BarlowTwinsLoss  # noqa: E402
 
 sys.path.append(f"/home/doronser/workspace/MedicalZooPytorch/")
 from lib.losses3D import DiceLoss  # noqa: E402
 from monai.networks.blocks import Convolution  # noqa: E402
-from monai.networks.nets import UNet as Monai_UNet  # noqa: E402
 
 
 class ClassifierModel(BaseModel):
@@ -350,17 +348,3 @@ class BarlowTwins(pl.LightningModule):
         }
 
         return [optimizer], [scheduler]
-
-
-# TODO decide where to place , needed for BarlowTwins optimizers
-def fn(warmup_steps, step):
-    if step < warmup_steps:
-        return float(step) / float(max(1, warmup_steps))
-    else:
-        return 1.0
-
-
-def linear_warmup_decay(warmup_steps):
-    return partial(fn, warmup_steps)
-
-

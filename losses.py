@@ -5,7 +5,6 @@ import torch.nn as nn
 class BarlowTwinsLoss(nn.Module):
     def __init__(self, batch_size, lambda_coeff=5e-3, z_dim=128):
         super().__init__()
-        # TODO check seems z_dim is irrelevant
         self.eps = 1e-10
         self.z_dim = z_dim
         self.batch_size = batch_size

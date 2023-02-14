@@ -1,17 +1,18 @@
+import os
 import sys
 import torch
 import wandb
 import numpy as np
 import pandas as pd
+import torchio as tio
 from tqdm import tqdm
 from pathlib import Path
+from copy import deepcopy
 from easydict import EasyDict
 
-import torchio as tio
-import monai.networks.nets as model_zoo
-
-sys.path.append(f"/home/doronser/workspace/")
-from brats18_project.models import SegModel, BarlowTwins  # noqa: E402
+sys.path.append(f"/home/{os.getlogin()}/workspace/")
+import brats18_project.models as model_zoo  # noqa: E402
+from brats18_project.models import SegModel, BarlowTwins, Encoder3D, Unet3D  # noqa: E402
 from brats18_project.data_utils import Brats18DataModule  # noqa: E402
 
 sys.path.append(f"/home/doronser/workspace/MedicalZooPytorch/")
@@ -21,21 +22,24 @@ from lib.losses3D import DiceLoss  # noqa: E402
 torch.manual_seed(42)
 np.random.seed(42)
 
-
-def get_wandb_model(wandb_path: str, barlow=False):
+def get_wandb_model(wandb_path: str):
     api = wandb.Api()
     run = api.run(wandb_path)
     cfg = EasyDict(run.config)
-    run_name = run.name.replace(' ', '_')
+    run_name = run.name  #.replace(' ', '_')
     ckpts_dir = Path(run.config['ckpt_path'])
     latest_ckpt = sorted([x for x in (ckpts_dir / run_name).glob('*')])[-1]
-    model_cls = getattr(model_zoo, cfg.model.name)
-    net = model_cls(**cfg.model.kwargs)
-    if barlow:
-        model = BarlowTwins.load_from_checkpoint(latest_ckpt, )
-    else:
-        model = SegModel.load_from_checkpoint(latest_ckpt, net=net, criterion=DiceLoss(classes=4),
-                                              optimizer_params=cfg.optimizer, scheduler_params=cfg.scheduler)
+    print(latest_ckpt)
+    try:
+        model_cls = getattr(model_zoo, cfg.model.name)
+        net = model_cls(**cfg.model.kwargs)
+
+    except AttributeError:
+        print("Using ssl")
+        net = Unet3D()
+
+    model = SegModel.load_from_checkpoint(latest_ckpt, net=net, criterion=DiceLoss(classes=4),
+                                          optimizer_params=cfg.optimizer, scheduler_params=cfg.scheduler)
     return model, cfg
 
 
