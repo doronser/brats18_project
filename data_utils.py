@@ -103,11 +103,11 @@ class Brats18DataModule(pl.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(dataset=self.train_set, shuffle=True, batch_size=self.batch_size,
-                          num_workers=self.num_workers, drop_last=self.ssl)#, collate_fn=self.collate_fn)
+                          num_workers=self.num_workers, drop_last=self.ssl, collate_fn=self.collate_fn)
 
     def val_dataloader(self):
         return DataLoader(dataset=self.val_set, shuffle=False, batch_size=self.batch_size,
-                          num_workers=self.num_workers, drop_last=self.ssl)#, collate_fn=self.collate_fn)
+                          num_workers=self.num_workers, drop_last=self.ssl, collate_fn=self.collate_fn)
 
     @staticmethod
     def parse_cfg_transform(yml_cfg: Union[dict, EasyDict]) -> Tuple[tio.Transform, None]:
