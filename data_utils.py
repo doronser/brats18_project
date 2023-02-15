@@ -1,5 +1,4 @@
 import os
-import sys
 import numpy as np
 from easydict import EasyDict
 from typing import Optional, Union, Tuple
@@ -9,8 +8,7 @@ import torchio as tio
 import pytorch_lightning as pl
 from torch.utils.data import Dataset, DataLoader, default_collate
 
-sys.path.append(f'/home/{os.getlogin()}')
-from brats18_project.custom_transforms import BarlowTwinsTransform
+from .utils import BarlowTwinsTransform  # noqa: E402
 
 
 def load_brats2018_data(base_path, prep=None, aug=None, train_ssl=False):
@@ -144,9 +142,6 @@ class Brats18DataModule(pl.LightningDataModule):
 
 def barlow_collate(batch):
     """custom collate function to correctly stack augmented data for barlow twins training"""
-    # print(f"{type(batch[0][0])=}")
-    # print(f"{len(batch[0])=}")
-    # print("BARLOW COLLATE 2!")
     x1_list = []
     x2_list = []
     for (x1, x2) in batch:

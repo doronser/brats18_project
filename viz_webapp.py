@@ -4,6 +4,7 @@ import streamlit as st
 from pathlib import Path
 from typing import Union
 import matplotlib.pyplot as plt
+from .utils import get_mri_indices  # noqa: E402
 
 
 @st.experimental_memo
@@ -39,10 +40,10 @@ def plot_mri_slice(mri_slice: np.ndarray, seg_slice: Union[None, np.ndarray] = N
     return fig
 
 
-st.set_page_config(layout="wide")
+# st.set_page_config(layout="wide")
 st.title("BraTS 2018 Data Visualization")
 
-base_dir = Path("/raid/data/users/doronser/")
+base_dir = Path("/home/doronser/data/brats/")
 hgg_subjects_dirs = sorted([subj_dir for subj_dir in (base_dir / "MICCAI_BraTS_2018_Data_Training/HGG").iterdir()])
 lgg_subjects_dirs = sorted([subj_dir for subj_dir in (base_dir / "MICCAI_BraTS_2018_Data_Training/LGG").iterdir()])
 
@@ -62,9 +63,10 @@ if subj_dir is not None and modal is not None:
     seg = subj['seg'].numpy()[0]
 
     col1, col2, col3 = st.columns(3)
-    x_ch = col1.slider("X Channel", 0, vol.shape[0]-1)
-    y_ch = col2.slider("Y Channel", 0, vol.shape[1]-1)
-    z_ch = col3.slider("Z Channel", 0, vol.shape[2]-1)
+    x_idx, y_idx, z_idx = get_mri_indices(seg)
+    x_ch = col1.slider("X Channel", 0, vol.shape[0]-1, value=x_idx)
+    y_ch = col2.slider("Y Channel", 0, vol.shape[1]-1, value=y_idx)
+    z_ch = col3.slider("Z Channel", 0, vol.shape[2]-1, value=z_idx)
 
     x_seg = None
     y_seg = None

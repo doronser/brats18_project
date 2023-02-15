@@ -1,11 +1,11 @@
-name: "fine_tune_10%"
-ckpt_path: "/home/doronser/storage/brats18_projects/fine_tune_ckpts/"
+name: "UNet3D_100%"
+ckpt_path: "/home/doronser/storage/brats18_projects/ckpts/"
 
 data:
   dir: "/raid/data/users/doronser/MICCAI_BraTS_2018_Data_Training/"
   batch_size: 1
   num_workers: 4
-  val_split_size: 0.9
+  val_split_size: 0.1
   preprocessing:
       ZNormalization:
         masking_method:
@@ -21,14 +21,21 @@ data:
         - 0
         - 1
         - 2
+# random per-channel intensity shift (-0.1, 0.1)
 
 
 model:
-    wandb_path: 'bio-vision-lab/intro2dl_brats2018/bm7ppl2d'
+  name: "Unet3D"
+  kwargs:
+    depth: 5
+    in_channels: 4
 
 trainer:
   epochs: 100
-  gpu: 0
+  gpu: 1
+
+loss:
+  name: 'DiceLoss'
 
 optimizer:
   name: 'Adam'
@@ -42,3 +49,7 @@ scheduler:
 #  eta_min: 1.e-6
   name: 'ExponentialLR'
   gamma: 0.95
+
+
+
+
