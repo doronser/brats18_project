@@ -1,15 +1,15 @@
-name: "barlow_twins_test"
+name: "fine_tune_50%"
 ckpt_path: "/home/doronser/storage/brats18_projects/fine_tune_ckpts/"
 
 data:
   dir: "/raid/data/users/doronser/MICCAI_BraTS_2018_Data_Training/"
-  batch_size: 4
-  num_workers: 16
-  val_split_size: 0.1
+  batch_size: 1
+  num_workers: 4
+  val_split_size: 0.5
   ssl: False
   preprocessing:
-#      ZNormalization:
-#        masking_method:
+      ZNormalization:
+        masking_method:
   augmentations:
     RandomAffine:
       scales:
@@ -36,7 +36,7 @@ trainer:
 
 optimizer:
   name: 'Adam'
-  lr: 1.e-4
+  lr: 3.e-4
   weight_decay: 5.e-5
   eps: 1.e-8
 

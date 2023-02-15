@@ -67,5 +67,3 @@ class BarlowTwinsTransform:
         # return self.transform(sample), self.transform(sample), self.finetune_transform(sample)
 
 
-
-

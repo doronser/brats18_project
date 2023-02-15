@@ -9,7 +9,7 @@ import torchio as tio
 import pytorch_lightning as pl
 from torch.utils.data import Dataset, DataLoader, default_collate
 
-sys.path.append(f'/home/{os.getlogin()}/workspace')
+sys.path.append(f'/home/{os.getlogin()}')
 from brats18_project.custom_transforms import BarlowTwinsTransform
 
 
