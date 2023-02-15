@@ -8,13 +8,56 @@ from torchmetrics import Accuracy
 
 
 sys.path.append(f"/home/{os.getlogin()}/workspace/")
-from shared_utils.models import BaseModel  # noqa: E402
 from .utils import linear_warmup_decay  # noqa: E402
 from .losses import BarlowTwinsLoss  # noqa: E402
 
 sys.path.append(f"/home/doronser/workspace/MedicalZooPytorch/")
 from lib.losses3D import DiceLoss  # noqa: E402
 from monai.networks.blocks import Convolution  # noqa: E402
+
+
+class BaseModel(pl.LightningModule):
+    """Template pytorch-lightning wrapper for vanilla pytorch nn.Modules"""
+    def __init__(self, net: nn.Module, criterion, optimizer_params=None, scheduler_params=None):
+        super().__init__()
+        self.net = net
+        self.criterion = criterion
+        self.optimizer_params = optimizer_params
+        self.scheduler_params = scheduler_params
+
+    def configure_optimizers(self):
+        """Configures an optimizer and scheduler based on dict params"""
+        DEFAULT_OPTIMIZER = dict(name='Adam', lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=1e-5)
+
+        if self.optimizer_params is None:
+            self.optimizer_params = DEFAULT_OPTIMIZER
+        optimizer_class = getattr(torch.optim, self.optimizer_params.pop('name'))
+        optimizer = optimizer_class(self.parameters(), **self.optimizer_params)
+
+        if self.scheduler_params is None:
+            return optimizer
+        else:
+            scheduler_class = getattr(torch.optim.lr_scheduler, self.scheduler_params.pop('name'))
+            scheduler = scheduler_class(optimizer, **self.scheduler_params)
+        return dict(optimizer=optimizer, lr_scheduler=scheduler)
+
+    def prepare_batch(self, batch):
+        raise NotImplementedError
+
+    def infer_batch(self, batch):
+        raise NotImplementedError
+
+    def training_step(self, batch, batch_idx):
+        scores, labels = self.infer_batch(batch)
+        loss = self.criterion(scores, labels)
+        self.log('train_loss', loss, prog_bar=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        preds, labels = self.infer_batch(batch)
+        loss = self.criterion(preds, labels)
+        self.log("val_loss", loss, batch_size=labels.shape[0], on_epoch=True, on_step=False)
+        return loss
 
 
 class ClassifierModel(BaseModel):
