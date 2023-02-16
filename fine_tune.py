@@ -16,8 +16,8 @@ from pytorch_lightning.loggers import WandbLogger
 
 
 user = os.getlogin()
-sys.path.append(f"/home/{user}")
-from shared_utils.io import yaml_read  # noqa: E402
+sys.path.append(f"/home/{user}/workspace")
+from utils import yaml_read  # noqa: E402
 from brats18_project.data_utils import Brats18DataModule  # noqa: E402
 from brats18_project.models import SegModel, ClassifierModel  # noqa: E402
 
@@ -53,9 +53,7 @@ if __name__ == "__main__":
 
     net = BarlowTwins.load_from_checkpoint(latest_ckpt, encoder=Encoder3D(), num_training_samples=7, batch_size=7)
 
-    unet = Unet3D()
-    unet.encoder = deepcopy(net.encoder)
-    # unet = Unet3D(encoder=deepcopy(net.encoder))
+    unet = Unet3D(encoder=deepcopy(net.encoder))
     model = SegModel(net=unet, criterion=DiceLoss(classes=4), optimizer_params=cfg.optimizer,
                      scheduler_params=cfg.scheduler)
 

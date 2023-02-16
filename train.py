@@ -12,8 +12,8 @@ from pytorch_lightning.loggers import WandbLogger
 
 
 user = os.getlogin()
-sys.path.append(f"/home/{user}")
-from shared_utils.io import yaml_read  # noqa: E402
+sys.path.append(f"/home/{user}/workspace")
+from utils import yaml_read  # noqa: E402
 from brats18_project.data_utils import Brats18DataModule  # noqa: E402
 from brats18_project.models import SegModel, ClassifierModel  # noqa: E402
 

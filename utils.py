@@ -1,6 +1,20 @@
-import pandas as pd
+import os
+import yaml
 import numpy as np
+import pandas as pd
+from easydict import EasyDict
 from functools import partial
+
+def yaml_read(path: str, unsafe_load: bool = False, easy_dict: bool = True):
+    with open(os.path.realpath(path), "r") as fp:
+        if unsafe_load:
+            obj = yaml.unsafe_load(fp)
+        else:
+            obj = yaml.safe_load(fp)
+
+    if easy_dict:
+        obj = EasyDict(obj)
+    return obj
 
 
 def get_mri_indices(mri) -> (int, int, int):
@@ -23,6 +37,7 @@ def get_mri_indices(mri) -> (int, int, int):
 
 
 class BarlowTwinsTransform:
+    """a data transformation that allows to return 2 augmented views of the same input"""
     def __init__(self, transform):
         self.transform = transform
 
