@@ -1,2 +1,7 @@
+.ipynb_checkpoints/*
 *.ipynb
-#configs/
+__pycache__/*
+.idea/*
+artifacts/
+data/
+wandb/
