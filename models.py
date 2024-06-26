@@ -306,9 +306,9 @@ class Encoder3D(nn.Module):
 
 class ProjectionHead(nn.Module):
     # def __init__(self, input_dim=768, hidden_dim=512, output_dim=64):
-    def __init__(self, input_dim=64, hidden_dim=64, output_dim=64):
+    def __init__(self, input_dim=64, hidden_dim=64, output_dim=64, avg_pool_size=(15, 15, 10)):
         super().__init__()
-        self.avg_pool = nn.AvgPool3d(kernel_size=(15, 15, 10))  # TODO: make this dynamic
+        self.avg_pool = nn.AvgPool3d(kernel_size=avg_pool_size)
         self.projection_head = nn.Sequential(
             nn.Linear(input_dim, hidden_dim, bias=True),
             # nn.BatchNorm1d(hidden_dim),
