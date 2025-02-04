@@ -8,7 +8,7 @@ PyYAML==6.0
 streamlit==1.14.0
 torchio==0.18.86
 torchmetrics==0.10.1
-tqdm==4.64.1
+tqdm==4.66.3
 
 # torch==1.12.1+cu102
 # torchvision==0.13.1+cu102
